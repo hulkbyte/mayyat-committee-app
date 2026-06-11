@@ -55,8 +55,8 @@ export default function PublicLookupPage() {
     setLoading(true);
     setError("");
 
-    const accountNo = String(new FormData(event.currentTarget).get("account_no") || "").trim();
-    const { data, error: lookupError } = await supabase.rpc("public_member_lookup", { p_account_no: accountNo });
+    const publicPin = String(new FormData(event.currentTarget).get("public_pin") || "").trim();
+    const { data, error: lookupError } = await supabase.rpc("public_member_lookup", { p_public_pin: publicPin });
 
     if (lookupError) {
       setError(lookupError.message);
@@ -116,7 +116,7 @@ export default function PublicLookupPage() {
             <p>{t("publicLookupHelp")}</p>
           </div>
         <form className="lookup-form" onSubmit={lookup}>
-          <input className="input" name="account_no" placeholder={t("exampleAccount")} required />
+          <input className="input" inputMode="numeric" maxLength={4} name="public_pin" pattern="[0-9]{4}" placeholder={t("examplePin")} required />
           <button className="button" disabled={loading || !supabase} type="submit">
             <Search size={18} />
             {loading ? t("checking") : t("search")}

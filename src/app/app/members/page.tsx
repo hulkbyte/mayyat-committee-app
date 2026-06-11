@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useState } from "react";
-import { Eye, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, RefreshCcw, Save, Search, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MEMBER_STATUSES } from "@/lib/constants";
@@ -14,10 +14,11 @@ type MemberRow = MemberAccount & {
   parent?: { account_no: string; member_name: string } | null;
 };
 
-function makeEmptyForm(monthlyFee = 200, accountNo = "") {
+function makeEmptyForm(monthlyFee = 200, accountNo = "", publicPin = "") {
   return {
     id: "",
     account_no: accountNo,
+    public_pin: publicPin,
     member_name: "",
     father_name: "",
     parent_account_id: "",
@@ -45,11 +46,29 @@ function nextAccountNoFromRows(rows: Array<{ account_no: string | null }>) {
   return String(max + 1).padStart(6, "0");
 }
 
+function generateUniquePin(rows: Array<{ public_pin?: string | null }>, currentPin = "") {
+  const usedPins = new Set(rows.map((row) => row.public_pin).filter(Boolean));
+  if (currentPin) usedPins.delete(currentPin);
+
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const pin = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+    if (!usedPins.has(pin)) return pin;
+  }
+
+  for (let pinNumber = 0; pinNumber <= 9999; pinNumber += 1) {
+    const pin = String(pinNumber).padStart(4, "0");
+    if (!usedPins.has(pin)) return pin;
+  }
+
+  return "";
+}
+
 export default function MembersPage() {
   const supabase = useMemo(() => createClient(), []);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [defaultFee, setDefaultFee] = useState(200);
   const [nextAccountNo, setNextAccountNo] = useState("000001");
+  const [nextPublicPin, setNextPublicPin] = useState("");
   const [form, setForm] = useState<MemberForm>(makeEmptyForm());
   const [isAdmin, setIsAdmin] = useState(false);
   const [query, setQuery] = useState("");
@@ -73,19 +92,21 @@ export default function MembersPage() {
     const [memberResult, settingsResult, accountResult] = await Promise.all([
       builder,
       supabase.from("settings").select("*").limit(1).single(),
-      supabase.from("member_accounts").select("account_no"),
+      supabase.from("member_accounts").select("*"),
     ]);
     if (memberResult.error) setError(memberResult.error.message);
     else setMembers((memberResult.data || []) as MemberRow[]);
 
     const generatedAccountNo = nextAccountNoFromRows((accountResult.data || []) as Array<{ account_no: string | null }>);
+    const generatedPublicPin = generateUniquePin((accountResult.data || []) as Array<{ public_pin?: string | null }>);
     setNextAccountNo(generatedAccountNo);
+    setNextPublicPin(generatedPublicPin);
     if (!settingsResult.error && settingsResult.data?.default_monthly_fee) {
       const fee = Number(settingsResult.data.default_monthly_fee);
       setDefaultFee(fee);
-      setForm((current) => (current.id || current.member_name || current.account_no ? current : makeEmptyForm(fee, generatedAccountNo)));
+      setForm((current) => (current.id || current.member_name || current.account_no ? current : makeEmptyForm(fee, generatedAccountNo, generatedPublicPin)));
     } else {
-      setForm((current) => (current.id || current.member_name || current.account_no ? current : makeEmptyForm(defaultFee, generatedAccountNo)));
+      setForm((current) => (current.id || current.member_name || current.account_no ? current : makeEmptyForm(defaultFee, generatedAccountNo, generatedPublicPin)));
     }
   }
 
@@ -111,6 +132,7 @@ export default function MembersPage() {
     const fd = new FormData(event.currentTarget);
     const payload = {
       account_no: String(fd.get("account_no") || "").trim(),
+      public_pin: String(fd.get("public_pin") || "").trim(),
       member_name: String(fd.get("member_name") || "").trim(),
       father_name: String(fd.get("father_name") || "").trim() || null,
       parent_account_id: String(fd.get("parent_account_id") || "") || null,
@@ -125,6 +147,11 @@ export default function MembersPage() {
       opening_balance: toNumber(fd.get("opening_balance"), 0),
       notes: String(fd.get("notes") || "").trim() || null,
     };
+
+    if (!/^\d{4}$/.test(payload.public_pin)) {
+      setError("Public lookup PIN must be exactly 4 digits.");
+      return;
+    }
 
     if (payload.marital_status === "Married" && !payload.wife_name) {
       setError("Wife name is required when marital status is Married.");
@@ -142,9 +169,7 @@ export default function MembersPage() {
     }
 
     setMessage(form.id ? "Member updated." : "Member added.");
-    const generatedAccountNo = nextAccountNoFromRows([...members, { account_no: payload.account_no }]);
-    setNextAccountNo(generatedAccountNo);
-    setForm(makeEmptyForm(defaultFee, generatedAccountNo));
+    setForm(makeEmptyForm(defaultFee));
     await loadMembers();
   }
 
@@ -172,6 +197,7 @@ export default function MembersPage() {
       ...makeEmptyForm(defaultFee),
       ...member,
       parent_account_id: member.parent_account_id || "",
+      public_pin: member.public_pin || "",
       father_name: member.father_name || "",
       phone: member.phone || "",
       address: member.address || "",
@@ -259,6 +285,7 @@ export default function MembersPage() {
                   <thead>
                     <tr>
                       <th>Account</th>
+                      <th>PIN</th>
                       <th>Member</th>
                       <th>Parent</th>
                       <th>Phone / Area</th>
@@ -273,6 +300,9 @@ export default function MembersPage() {
                     {members.map((member) => (
                       <tr key={member.id}>
                         <td>{member.account_no}</td>
+                        <td>
+                          <strong>{member.public_pin || "-"}</strong>
+                        </td>
                         <td>
                           <strong>{member.member_name}</strong>
                           <br />
@@ -331,7 +361,7 @@ export default function MembersPage() {
                       <StatusBadge value={member.status} />
                     </div>
                     <small>
-                      {member.area || "-"} - {money(member.monthly_fee)} - {member.marital_status} - Since {dateOnly(member.join_date)}
+                      PIN {member.public_pin || "-"} - {member.area || "-"} - {money(member.monthly_fee)} - {member.marital_status} - Since {dateOnly(member.join_date)}
                     </small>
                     <div className="row-actions">
                       <button
@@ -363,7 +393,7 @@ export default function MembersPage() {
           <div className="toolbar" style={{ justifyContent: "space-between" }}>
             <h2>{form.id ? "Edit member" : "Add member"}</h2>
             {form.id ? (
-              <button className="button secondary" onClick={() => setForm(makeEmptyForm(defaultFee, nextAccountNo))} type="button">
+              <button className="button secondary" onClick={() => setForm(makeEmptyForm(defaultFee, nextAccountNo, nextPublicPin))} type="button">
                 <Plus size={16} /> New
               </button>
             ) : null}
@@ -385,6 +415,24 @@ export default function MembersPage() {
           ) : null}
           <div className="form-grid">
             <Field name="account_no" label="AccountNo" required value={form.account_no} onChange={setForm} />
+            <label className="field">
+              <span>Public lookup PIN</span>
+              <div className="toolbar">
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  maxLength={4}
+                  name="public_pin"
+                  pattern="[0-9]{4}"
+                  required
+                  value={form.public_pin}
+                  onChange={(event) => setForm({ ...form, public_pin: event.target.value.replace(/\D/g, "").slice(0, 4) })}
+                />
+                <button className="icon-button" onClick={() => setForm({ ...form, public_pin: generateUniquePin(members, form.public_pin) })} title="Generate new PIN" type="button">
+                  <RefreshCcw size={17} />
+                </button>
+              </div>
+            </label>
             <Field name="member_name" label="Member name" required value={form.member_name} onChange={setForm} />
             <Field name="father_name" label="Father name" value={form.father_name} onChange={setForm} />
             <label className="field">

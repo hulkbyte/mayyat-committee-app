@@ -29,6 +29,7 @@ on conflict do nothing;
 create table public.member_accounts (
   id uuid primary key default gen_random_uuid(),
   account_no text not null unique,
+  public_pin text not null unique check (public_pin ~ '^[0-9]{4}$'),
   member_name text not null,
   father_name text,
   parent_account_id uuid references public.member_accounts(id) on delete set null,
@@ -167,6 +168,7 @@ create table public.admin_notifications (
 );
 
 create index idx_members_account_no on public.member_accounts(account_no);
+create unique index idx_members_public_pin on public.member_accounts(public_pin);
 create index idx_members_parent on public.member_accounts(parent_account_id);
 create index idx_monthly_month on public.monthly_payments(payment_month);
 create index idx_ledger_source on public.fund_ledger(source_type, source_id);
@@ -674,7 +676,7 @@ select
   (select coalesce(max(per_member_extra), 0) from public.death_cases where case_status <> 'Closed') as per_member_extra,
   (select coalesce(sum(balance), 0) from public.extra_collections where extra_status <> 'Paid') as pending_extra;
 
-create or replace function public.public_member_lookup(p_account_no text)
+create or replace function public.public_member_lookup(p_public_pin text)
 returns jsonb
 language plpgsql
 security definer
@@ -704,7 +706,7 @@ begin
     left join public.monthly_payments mp
       on mp.account_id = m.id
      and date_trunc('month', mp.payment_month) = date_trunc('month', current_date)
-    where m.account_no = p_account_no
+    where m.public_pin = trim(p_public_pin)
     limit 1
   ) x;
 

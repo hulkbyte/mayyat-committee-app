@@ -65,6 +65,7 @@ export default function MemberDetailPage() {
           <h2>Account details</h2>
           <div className="detail-grid">
             <Detail label="AccountNo" value={member.account_no} />
+            <Detail label="Public lookup PIN" value={member.public_pin || "-"} />
             <Detail label="Status" value={<StatusBadge value={member.status} />} />
             <Detail label="Father" value={member.father_name || "-"} />
             <Detail label="Phone" value={member.phone || "-"} />

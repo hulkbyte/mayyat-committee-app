@@ -12,6 +12,7 @@ export type StaffUser = {
 export type MemberAccount = {
   id: string;
   account_no: string;
+  public_pin: string;
   member_name: string;
   father_name: string | null;
   parent_account_id: string | null;
