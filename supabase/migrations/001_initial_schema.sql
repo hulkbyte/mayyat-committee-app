@@ -152,11 +152,26 @@ create table public.fund_ledger (
   created_at timestamptz not null default now()
 );
 
+create table public.admin_notifications (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references public.users(id) on delete set null,
+  actor_name text,
+  actor_role text,
+  action text not null check (action in ('INSERT', 'UPDATE', 'DELETE')),
+  entity_type text not null,
+  entity_id uuid,
+  title text not null,
+  body text,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create index idx_members_account_no on public.member_accounts(account_no);
 create index idx_members_parent on public.member_accounts(parent_account_id);
 create index idx_monthly_month on public.monthly_payments(payment_month);
 create index idx_ledger_source on public.fund_ledger(source_type, source_id);
 create index idx_extra_case on public.extra_collections(case_id);
+create index idx_admin_notifications_read_created on public.admin_notifications(is_read, created_at desc);
 
 create or replace function public.current_user_role()
 returns text
@@ -204,6 +219,85 @@ create trigger touch_members_updated before update on public.member_accounts for
 create trigger touch_monthly_updated before update on public.monthly_payments for each row execute function public.touch_updated_at();
 create trigger touch_expenses_updated before update on public.case_expenses for each row execute function public.touch_updated_at();
 create trigger touch_extra_updated before update on public.extra_collections for each row execute function public.touch_updated_at();
+
+create or replace function public.notify_admin_on_editor_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor public.users%rowtype;
+  row_data jsonb;
+  entity_label text;
+  entity_type_label text;
+  entity_id_value uuid;
+  action_label text;
+begin
+  select * into actor from public.users where id = auth.uid() and status = 'active';
+
+  if actor.id is null or actor.role <> 'editor' then
+    return coalesce(new, old);
+  end if;
+
+  row_data := to_jsonb(coalesce(new, old));
+  entity_id_value := nullif(row_data->>'id', '')::uuid;
+
+  entity_type_label := case tg_table_name
+    when 'member_accounts' then 'member'
+    when 'monthly_payments' then 'monthly payment'
+    when 'death_cases' then 'death case'
+    when 'case_expenses' then 'case expense'
+    when 'extra_collections' then 'extra collection'
+    else replace(tg_table_name, '_', ' ')
+  end;
+
+  entity_label := case tg_table_name
+    when 'member_accounts' then trim(coalesce(row_data->>'account_no', '') || ' - ' || coalesce(row_data->>'member_name', ''))
+    when 'monthly_payments' then 'Payment month ' || coalesce(row_data->>'payment_month', '-')
+    when 'death_cases' then trim(coalesce(row_data->>'case_no', '') || ' - ' || coalesce(row_data->>'deceased_name', ''))
+    when 'case_expenses' then trim(coalesce(row_data->>'category', 'Expense') || ' Rs ' || coalesce(row_data->>'amount', '0'))
+    when 'extra_collections' then 'Extra due Rs ' || coalesce(row_data->>'extra_due', '0') || ', paid Rs ' || coalesce(row_data->>'extra_paid', '0')
+    else coalesce(row_data->>'id', '-')
+  end;
+
+  action_label := case tg_op
+    when 'INSERT' then 'added'
+    when 'UPDATE' then 'updated'
+    when 'DELETE' then 'deleted'
+    else lower(tg_op)
+  end;
+
+  insert into public.admin_notifications (
+    actor_id,
+    actor_name,
+    actor_role,
+    action,
+    entity_type,
+    entity_id,
+    title,
+    body
+  )
+  values (
+    actor.id,
+    actor.name,
+    actor.role,
+    tg_op,
+    entity_type_label,
+    entity_id_value,
+    actor.name || ' ' || action_label || ' ' || entity_type_label,
+    nullif(entity_label, '')
+  );
+
+  return coalesce(new, old);
+end;
+$$;
+
+create trigger notify_editor_member_change after insert or update or delete on public.member_accounts for each row execute function public.notify_admin_on_editor_change();
+create trigger notify_editor_payment_change after insert or update or delete on public.monthly_payments for each row execute function public.notify_admin_on_editor_change();
+create trigger notify_editor_case_change after insert or update or delete on public.death_cases for each row execute function public.notify_admin_on_editor_change();
+create trigger notify_editor_expense_change after insert or update or delete on public.case_expenses for each row execute function public.notify_admin_on_editor_change();
+create trigger notify_editor_extra_change after insert or update or delete on public.extra_collections for each row execute function public.notify_admin_on_editor_change();
 
 create or replace function public.set_payment_status()
 returns trigger
@@ -653,6 +747,7 @@ alter table public.death_cases enable row level security;
 alter table public.case_expenses enable row level security;
 alter table public.extra_collections enable row level security;
 alter table public.fund_ledger enable row level security;
+alter table public.admin_notifications enable row level security;
 
 create policy "staff can read users" on public.users for select using (public.is_staff());
 create policy "admin can manage users" on public.users for all using (public.is_admin()) with check (public.is_admin());
@@ -690,6 +785,10 @@ create policy "admin can insert opening ledger" on public.fund_ledger for insert
 create policy "admin can update opening ledger" on public.fund_ledger for update using (public.is_admin() and source_type = 'Opening Balance') with check (public.is_admin() and source_type = 'Opening Balance' and transaction_type = 'In' and out_amount = 0);
 create policy "admin can delete ledger" on public.fund_ledger for delete using (public.is_admin());
 
+create policy "admin can read notifications" on public.admin_notifications for select using (public.is_admin());
+create policy "admin can update notifications" on public.admin_notifications for update using (public.is_admin()) with check (public.is_admin());
+create policy "admin can delete notifications" on public.admin_notifications for delete using (public.is_admin());
+
 grant usage on schema public to anon, authenticated;
 grant execute on function public.public_member_lookup(text) to anon, authenticated;
 grant execute on function public.create_death_case(text, uuid, text, date, date, text) to authenticated;
@@ -698,3 +797,4 @@ grant execute on function public.apply_monthly_fee_change(uuid, numeric, text, d
 grant execute on function public.reset_committee_data() to authenticated;
 grant execute on function public.get_fund_balance() to authenticated;
 grant select on public.dashboard_summary to authenticated;
+grant select, update, delete on public.admin_notifications to authenticated;

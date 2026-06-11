@@ -5,7 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Banknote,
+  Bell,
   BookOpen,
+  CheckCheck,
   ClipboardList,
   Gauge,
   HeartHandshake,
@@ -21,7 +23,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/lib/i18n";
-import type { StaffUser } from "@/lib/types";
+import type { AdminNotification, StaffUser } from "@/lib/types";
 
 const navItems = [
   { href: "/app/dashboard", labelKey: "dashboard", icon: Gauge },
@@ -42,6 +44,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
   const [profile, setProfile] = useState<StaffUser | null>(null);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
   const [error, setError] = useState("");
@@ -89,12 +93,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setNavOpen(false);
+    setNotificationsOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!supabase || profile?.role !== "admin") return;
+
+    loadNotifications();
+    const timer = window.setInterval(loadNotifications, 60000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.role, supabase]);
+
+  async function loadNotifications() {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("admin_notifications")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(12);
+
+    setNotifications((data || []) as AdminNotification[]);
+  }
+
+  async function markNotificationsRead() {
+    if (!supabase) return;
+    const unreadIds = notifications.filter((item) => !item.is_read).map((item) => item.id);
+    if (unreadIds.length === 0) return;
+
+    const { error: updateError } = await supabase.from("admin_notifications").update({ is_read: true }).in("id", unreadIds);
+    if (!updateError) {
+      setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
+    }
+  }
 
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
     router.replace("/login");
   }
+
+  const unreadCount = notifications.filter((item) => !item.is_read).length;
 
   if (loading) {
     return (
@@ -154,6 +192,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p>{profile?.name}</p>
           </div>
           <div className="toolbar">
+            {profile?.role === "admin" ? (
+              <div className="notification-wrap">
+                <button
+                  className={`icon-button notification-button ${unreadCount > 0 ? "has-unread" : ""}`}
+                  onClick={() => setNotificationsOpen((value) => !value)}
+                  title="Notifications"
+                  type="button"
+                >
+                  <Bell size={18} />
+                  {unreadCount > 0 ? <span className="notification-count">{unreadCount}</span> : null}
+                </button>
+                {notificationsOpen ? (
+                  <div className="notification-panel">
+                    <div className="notification-head">
+                      <div>
+                        <strong>Notifications</strong>
+                        <small>{unreadCount} unread editor updates</small>
+                      </div>
+                      <button className="action-button secondary-action" onClick={markNotificationsRead} type="button">
+                        <CheckCheck size={15} />
+                        Read
+                      </button>
+                    </div>
+                    <div className="notification-list">
+                      {notifications.length === 0 ? <div className="notice compact-notice">No editor notifications yet.</div> : null}
+                      {notifications.map((item) => (
+                        <div className={`notification-item ${item.is_read ? "" : "unread"}`} key={item.id}>
+                          <div className="toolbar" style={{ justifyContent: "space-between" }}>
+                            <strong>{item.title}</strong>
+                            {!item.is_read ? <span className="badge good">New</span> : null}
+                          </div>
+                          {item.body ? <p>{item.body}</p> : null}
+                          <small>{new Date(item.created_at).toLocaleString()}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <label className="language-toggle">
               <span>{t("language")}</span>
               <select className="select" onChange={(event) => setLanguage(event.target.value as "en" | "ur")} value={language}>

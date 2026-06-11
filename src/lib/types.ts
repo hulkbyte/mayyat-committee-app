@@ -42,3 +42,17 @@ export type DashboardSummary = {
   per_member_extra: number;
   pending_extra: number;
 };
+
+export type AdminNotification = {
+  id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_role: UserRole | null;
+  action: "INSERT" | "UPDATE" | "DELETE";
+  entity_type: string;
+  entity_id: string | null;
+  title: string;
+  body: string | null;
+  is_read: boolean;
+  created_at: string;
+};
