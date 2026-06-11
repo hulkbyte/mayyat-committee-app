@@ -43,6 +43,23 @@ textarea {
   font: inherit;
 }
 
+button,
+a,
+.input,
+.select,
+.textarea,
+.card,
+.metric-card,
+.table-card,
+.summary-chip,
+.dashboard-hero article {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -81,6 +98,7 @@ a {
   border-radius: 14px;
   background: var(--surface);
   box-shadow: var(--shadow);
+  animation: entry-shell-in 420ms ease-out both;
 }
 
 .entry-visual {
@@ -93,6 +111,7 @@ a {
   background:
     linear-gradient(135deg, rgba(11, 79, 74, 0.94), rgba(15, 118, 110, 0.92)),
     #0b4f4a;
+  animation: entry-panel-in 520ms ease-out both;
 }
 
 .entry-visual h1 {
@@ -146,6 +165,7 @@ a {
   border: 0;
   box-shadow: none;
   padding: 34px;
+  animation: card-rise 480ms 90ms ease-out both;
 }
 
 .entry-card h2 {
@@ -364,6 +384,7 @@ a {
 .summary-chip:hover {
   border-color: rgba(15, 118, 110, 0.45);
   background: var(--brand-soft);
+  transform: translateY(-1px);
 }
 
 .dashboard-hero {
@@ -517,6 +538,7 @@ a {
 
 .button:hover {
   background: var(--brand-dark);
+  transform: translateY(-1px);
 }
 
 .button.secondary {
@@ -540,6 +562,12 @@ a {
   color: var(--ink);
   cursor: pointer;
   box-shadow: var(--shadow-soft);
+}
+
+.icon-button:hover,
+.action-button:hover,
+.mini-pill:hover {
+  transform: translateY(-1px);
 }
 
 .danger-icon {
@@ -756,6 +784,54 @@ td {
   padding: 10px 12px;
 }
 
+@keyframes entry-shell-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes entry-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes menu-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 980px) {
   .entry-shell,
   .public-entry {
@@ -810,6 +886,7 @@ td {
 
   .sidebar.nav-open .nav-list {
     display: grid;
+    animation: menu-drop 180ms ease-out both;
   }
 
   .nav-link {
@@ -833,12 +910,14 @@ td {
 
   .entry-shell {
     border-radius: 10px;
+    animation-duration: 360ms;
   }
 
   .entry-visual {
     min-height: auto;
     padding: 16px 18px;
     align-content: start;
+    animation: card-rise 360ms ease-out both;
   }
 
   .entry-visual h1,
@@ -909,6 +988,39 @@ td {
   .public-result-card {
     padding: 14px;
   }
+
+  .dashboard-hero article,
+  .metric-card,
+  .summary-chip,
+  .card,
+  .table-card,
+  .list-card {
+    animation: card-rise 360ms ease-out both;
+  }
+
+  .dashboard-hero article:nth-child(2),
+  .metrics-grid .metric-card:nth-child(2),
+  .summary-chips .summary-chip:nth-child(2),
+  .card:nth-child(2) {
+    animation-delay: 45ms;
+  }
+
+  .dashboard-hero article:nth-child(3),
+  .metrics-grid .metric-card:nth-child(3),
+  .summary-chips .summary-chip:nth-child(3),
+  .card:nth-child(3) {
+    animation-delay: 90ms;
+  }
+
+  .metrics-grid .metric-card:nth-child(4),
+  .summary-chips .notice,
+  .card:nth-child(4) {
+    animation-delay: 135ms;
+  }
+
+  .metrics-grid .metric-card:nth-child(n + 5) {
+    animation-delay: 160ms;
+  }
 }
 
 [dir="rtl"] body {
@@ -945,5 +1057,16 @@ td {
   .table-card {
     box-shadow: none;
     break-inside: avoid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
