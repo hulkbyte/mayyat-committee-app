@@ -1,0 +1,17 @@
+{
+  "name": "Mayyat Committee Management App",
+  "short_name": "Mayyat Committee",
+  "description": "Mobile-first committee fund, member, payment, and death case management.",
+  "start_url": "/app/dashboard",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
