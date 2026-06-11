@@ -182,24 +182,6 @@ a {
   text-transform: uppercase;
 }
 
-.entry-link {
-  width: fit-content;
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  color: var(--brand-dark);
-  border: 1px solid rgba(15, 118, 110, 0.2);
-  border-radius: 8px;
-  padding: 8px 11px;
-  background: var(--surface-soft);
-  font-weight: 800;
-}
-
-.entry-link:hover {
-  border-color: rgba(15, 118, 110, 0.45);
-  background: var(--brand-soft);
-}
-
 .lookup-actions {
   justify-content: flex-end;
 }

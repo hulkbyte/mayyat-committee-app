@@ -82,6 +82,11 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="auth-panel entry-card">
+          <div className="toolbar lookup-actions">
+            <Link className="button secondary" href="/public">
+              Member lookup
+            </Link>
+          </div>
           <div>
             <span className="entry-kicker">Admin access</span>
             <h2>Welcome back</h2>
@@ -97,7 +102,6 @@ export default function LoginPage() {
             <input className="input" name="password" required type="password" />
           </label>
           {error ? <div className="error">{error}</div> : null}
-          <Link className="entry-link" href="/public">Open public member lookup</Link>
           <button className="button" disabled={loading || !supabase} type="submit">
             <LogIn size={18} />
             {loading ? "Logging in..." : "Login"}
